@@ -53,6 +53,8 @@ Vec3f PathTracer::traceSample(Vec2u pixel, PathSampleGenerator &sampler, uint sp
 
     bool recordedOutputValues = false;
     float hitDistance = 0.0f;
+    // added for gpis blender project
+    float firstHitDistance = -1.0f;
 
     int mediumBounces = 0;
     int bounce = 0;
@@ -75,6 +77,12 @@ Vec3f PathTracer::traceSample(Vec2u pixel, PathSampleGenerator &sampler, uint sp
             if (hitSurface && !didHit)
                 break;
 
+            if (firstHitDistance < 0.0f  && !mediumSample.exited) { // recorded only once
+                firstHitDistance = hitDistance + float(mediumSample.t);
+                 if (_trackOutputValues && _scene->cam().depthBuffer())
+                    _scene->cam().depthBuffer()->addSample(pixel, firstHitDistance);
+            }
+
             if (abs(mediumSample.t - ray.farT()) < 0.0000001f && !mediumSample.exited) {
                 std::cerr << "Reached end of ray, but not counting it as exited...\n";
             }
@@ -82,6 +90,12 @@ Vec3f PathTracer::traceSample(Vec2u pixel, PathSampleGenerator &sampler, uint sp
 
         if (hitSurface) {
             hitDistance += ray.farT();
+
+            if (firstHitDistance < 0.0f && !info.bsdf->lobes().isForward()) {
+                firstHitDistance = hitDistance;
+                if (_trackOutputValues && _scene->cam().depthBuffer())
+                    _scene->cam().depthBuffer()->addSample(pixel, firstHitDistance);
+            }
 
             if (mediumBounces == 1 && !_settings.lowOrderScattering)
                 return emission;
@@ -105,8 +119,9 @@ Vec3f PathTracer::traceSample(Vec2u pixel, PathSampleGenerator &sampler, uint sp
                     return emission;
 
             if (_trackOutputValues && !recordedOutputValues && (!wasSpecular || terminate)) {
-                if (_scene->cam().depthBuffer())
-                    _scene->cam().depthBuffer()->addSample(pixel, hitDistance);
+                // if (_scene->cam().depthBuffer())
+                //     // _scene->cam().depthBuffer()->addSample(pixel, hitDistance);
+                //     _scene->cam().depthBuffer()->addSample(pixel, firstHitDistance >= 0.0f ? firstHitDistance : hitDistance);
                 if (_scene->cam().normalBuffer())
                     _scene->cam().normalBuffer()->addSample(pixel, info.Ns);
                 if (_scene->cam().albedoBuffer()) {
@@ -168,7 +183,9 @@ Vec3f PathTracer::traceSample(Vec2u pixel, PathSampleGenerator &sampler, uint sp
         }
     }
     if (bounce >= _settings.minBounces && bounce < _settings.maxBounces) {
-        handleInfiniteLights(data, info, _settings.enableLightSampling, ray, throughput, wasSpecular, emission);
+        if (bounce > 0) {
+            handleInfiniteLights(data, info, _settings.enableLightSampling, ray, throughput, wasSpecular, emission);
+        }
         if (_firstMediumBounceCb) {
             mediumSample.p = ray.pos() + ray.dir() * 10;
             if (!_firstMediumBounceCb(mediumSample, ray.scatter(mediumSample.p, ray.dir(), 0))) {
@@ -186,7 +203,8 @@ Vec3f PathTracer::traceSample(Vec2u pixel, PathSampleGenerator &sampler, uint sp
         return nanEnvDirColor;
 
     if (_trackOutputValues && !recordedOutputValues) {
-        if (_scene->cam().depthBuffer() && bounce == 0)
+        // if (_scene->cam().depthBuffer() && bounce == 0)
+        if (_scene->cam().depthBuffer() && bounce == 0 && firstHitDistance < 0.0f)
             _scene->cam().depthBuffer()->addSample(pixel, 0.0f);
         if (_scene->cam().normalBuffer())
             _scene->cam().normalBuffer()->addSample(pixel, -ray.dir());

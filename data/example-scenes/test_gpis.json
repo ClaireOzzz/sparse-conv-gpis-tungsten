@@ -1,0 +1,175 @@
+{
+    "media": [
+        {
+            "name": "gp",
+            "phase_function": {
+                "type": "brdf",
+                "bsdf": {
+                    "albedo": 1,
+                    "type": "mirror"
+                }
+            },
+            "max_bounces": 2,
+            "sigma_a": 0.0,
+            "sigma_s": 1.0,
+            "density": 1,
+            "sample_points": 8,
+            "step_size_cov": 0.9,
+            "step_size": 0.05,
+            "seed": 0,
+            "type": "sparse_conv_noise",
+            "impulse_density": 4.5,
+            "single_realization": true,
+            "1D_sampling": false,
+            "isotropic_3D_sampling": true,
+            "1D_sampling_scheme": "mis",
+            "1D_gradient_correlationXY": false,
+            "correlation_context": "renewal+",
+            "gaussian_process": {
+                "id": 0,
+                "type": "standard",
+                "covariance_epsilon": 0,
+                "mean": {
+                    "type": "procedural",
+                    "func": "sphere",
+                    "transform": {
+                        "position": [
+                            0.0,
+                            1.0,
+                            0
+                        ],
+                        "scale": 0.7,
+                        "rotation": [
+                            0.0,
+                            0.0,
+                            0.0
+                        ]
+                    }
+                },
+                "covariance": {
+                    "aniso": [1,1,1],
+                    "type": "squared_exponential",
+                    "lengthScale": 0.05,
+                    "sigma": 0.1
+                }
+            }
+        }
+    ],
+    "bsdfs": [
+        {
+            "name": "forward",
+            "albedo": 1.0,
+            "type": "forward"
+        },
+        {
+            "name": "mirror",
+            "albedo": 1,
+            "type": "mirror",
+            "k": 0,
+            "eta": 0,
+            "distribution": "ggx"
+        },
+        {
+            "name": "rough_conductor",
+            "albedo": [
+                0.725,
+                0.71,
+                0.68
+            ],
+            "roughness": 0.2,
+            "type": "rough_conductor"
+        }
+    ],
+    "primitives": [
+        {
+            "name": "Envmap",
+            "transform": {
+                "position": [
+                    0,
+                    0,
+                    0
+                ],
+                "rotation": [
+                    0,
+                    0,
+                    0
+                ]
+            },
+            "bump_strength": 0.1,
+            "emission": "envmap.hdr",
+            "type": "infinite_sphere",
+            "sample": true,
+            "bsdf": {
+                "albedo": 1,
+                "type": "null"
+            }
+        },
+        {
+            "name": "gp_bound_outer",
+            "transform": {
+                "position": [
+                    0,
+                    1,
+                    0
+                ],
+                "scale": 3.0
+            },
+            "type": "cube",
+            "bsdf": "forward",
+            "int_medium": "gp"
+        }
+
+    ],
+    "camera": {
+        "tonemap": "linear",
+        "resolution": [
+            1000,
+            563
+        ],
+        "reconstruction_filter": "tent",
+        "transform": {
+            "position": [
+                0,
+                1,
+                6.8
+            ],
+            "look_at": [
+                0,
+                1,
+                0
+            ],
+            "up": [
+                0,
+                1,
+                0
+            ]
+        },
+        "type": "pinhole",
+        "fov": 35
+    },
+    "integrator": {
+        "type": "path_tracer",
+        "min_bounces": 0,
+        "max_bounces": 5,
+        "enable_consistency_checks": false,
+        "enable_two_sided_shading": true,
+        "enable_light_sampling": true,
+        "enable_volume_light_sampling": true
+    },
+    "renderer": {
+        "output_file": "",
+        "hdr_output_file": "GPIS_Render.exr",
+        "overwrite_output_files": false,
+        "adaptive_sampling": false,
+        "enable_resume_render": false,
+        "stratified_sampler": false,
+        "scene_bvh": true,
+        "spp": 5,
+        "spp_step": 1,
+        "checkpoint_interval": "0",
+        "timeout": "0",
+        "output_buffers": [
+            {"type": "depth",  "hdr_output_file": "depth.exr"}
+        ]
+    }
+}
