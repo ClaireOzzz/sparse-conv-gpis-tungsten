@@ -3,6 +3,13 @@
 
 #include <sampling/Gaussian.hpp>
 
+#define _USE_MATH_DEFINES
+#include <cmath>
+#include "MathUtil.hpp"
+
+#define ISOTROPICRAYSPACESAMPLING 0
+#define MULTIVARIATEGRID 0
+
 namespace Tungsten {
 
 SparseConvolutionNoiseRealization::SparseConvolutionNoiseRealization(
@@ -14,7 +21,7 @@ SparseConvolutionNoiseRealization::SparseConvolutionNoiseRealization(
     _gp(gp), _ctxt(ctxt),
     _globalSeed(globalSeed), _impulseDensity(impulseDensity), _useSingleRealization(useSingleRealization),
     _isotropicSpace3DSampling(isotropicSpace3DSampling),
-    _isotropicRaySpace3DSampling(true),
+    _isotropicRaySpace3DSampling(ISOTROPICRAYSPACESAMPLING),
     _1DSampling(oneDSampling), _correlationXY(correlationXY),
     _surfVolPhaseSeparate(surfVolPhaseSeparate), _surfVolPhaseAmpThresh(surfVolPhaseAmpThresh)
     {
@@ -271,7 +278,12 @@ Vec4f SparseConvolutionNoiseRealization::evaluateNoise3DIsotropicNormalized(cons
     Vec3f p_iso = _gp->_cov->transformPosDirWorldtoLocal(p, kernelSpatialScale);
     int additional_seed = floor(log(kernelSpatialScale) / log(_base)); // For multi-resolution noise
     // Evaluate the noise in isotropic space
-    Vec4f noise_iso = noise3D(p, p_iso, seed + additional_seed, sampler, impulseDensity, kernelRadius, 1.0);
+    Vec4f noise_iso;
+    if (MULTIVARIATEGRID)
+        noise_iso = noise3D(p, p_iso, seed + additional_seed, sampler, impulseDensity, kernelRadius, 1.0);
+    else
+        noise_iso = noise3D(p, p_iso, seed, sampler, impulseDensity, kernelRadius, 1.0);
+
     Vec3f grad_iso = noise_iso.yzw();
     // Transform the gradient from isotropic space back to world space
     Vec3f grad_world = _gp->_cov->transformGradLocaltoWorld(grad_iso, kernelSpatialScale);
@@ -361,9 +373,16 @@ Vec4f SparseConvolutionNoiseRealization::evaluateNoise1DNormalized(const Vec3f& 
 
 Vec4f SparseConvolutionNoiseRealization::noise3D(const Vec3f& p_world, const Vec3f& p, const uint seed, UniformSampler& sampler, float impulseDensity, float kernelRadius, float kernelSpatialScale) const {
     Vec3f p_grid = p / kernelRadius;
-    Vec3f frac = Vec3f(p_grid - floor(p_grid));
-    Vec3i ijk = Vec3i(floor(p_grid));
-    Vec4f sum = Vec4f(0.0);
+    // Component-wise floor on Vec3f
+    // Vec3f frac = Vec3f(p_grid - floor(p_grid));
+    // Vec3i ijk = Vec3i(floor(p_grid));
+    // Vec4f sum = Vec4f(0.0);
+
+    // added below since floor doesn't work on MSVC or windows
+    Vec3f floor_grid(std::floor(p_grid.x()), std::floor(p_grid.y()), std::floor(p_grid.z()));
+    Vec3f frac = p_grid - floor_grid;
+    Vec3i ijk = Vec3i(floor_grid);
+    Vec4f sum = Vec4f(0.0f);
 
     for (int dx = -1; dx <= 1; ++dx)
         for (int dy = -1; dy <= 1; ++dy)
