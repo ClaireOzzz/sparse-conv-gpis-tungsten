@@ -269,4 +269,61 @@ Vec4f evaluateNoise3DIsotropicRayNormalized(const Vec3f& p, const Vec3f& rayDir,
     return noise_world;
 }
 
+Vec4f SparseConvolutionNoiseRealization::evaluateNoise3DIsotropicNormalized(const Vec3f& p, const Vec3f& rayDir, const uint seed, UniformSampler& sampler, float impulseDensity, float kernelRadius, float kernelSpatialScale, bool conditioning) {
+    // Transform the point from world space into isotropic space
+    Vec3f p_iso = _gp->_cov->transformPosDirWorldtoLocal(p, kernelSpatialScale);
+    int additional_seed = floor(log(kernelSpatialScale) / log(_base)); // For multi-resolution noise
+    // Evaluate the noise in isotropic space
+    Vec4f noise_iso = noise3D(p, p_iso, seed + additional_seed, sampler, impulseDensity, kernelRadius, 1.0);
+    Vec3f grad_iso = noise_iso.yzw();
+    // Transform the gradient from isotropic space back to world space
+    Vec3f grad_world = _gp->_cov->transformGradLocaltoWorld(grad_iso, kernelSpatialScale);
+    Vec4f noise_world = Vec4f(noise_iso.x(), grad_world.x(), grad_world.y(), grad_world.z());
+    float normalization_factor = sqrt(_gp->_cov->sparseConvNoiseVariance3D(p, impulseDensity, kernelRadius, true, 1.0));
+    noise_world /= normalization_factor;
+    if (_activateConditioning && conditioning) {
+        Vec3f origin_iso = _gp->_cov->transformPosDirWorldtoLocal(coeff_3D.ray_origin, kernelSpatialScale);
+        Vec4f noise_delta_iso = _gp->_cov->splattingKernel3D(p_iso, origin_iso, true, true, 1.0, p) * coeff_3D.value_scale + _gp->_cov->splattingKernel3DGrad(p_iso, origin_iso, coeff_3D.gradient_scale, true, true, 1.0, p);
+        Vec3f grad_delta_iso = noise_delta_iso.yzw();
+        Vec3f grad_delta_world = _gp->_cov->transformGradLocaltoWorld(grad_delta_iso, kernelSpatialScale);
+        noise_world += Vec4f(noise_delta_iso.x(), grad_delta_world.x(), grad_delta_world.y(), grad_delta_world.z());
+    }
+    return noise_world;
+}
+
+
+inline Vec4f SparseConvolutionNoiseRealization::evaluateNoise3DIsotropicNormalizedSelect(const Vec3f& p, const Vec3f& rayDir, const uint seed, UniformSampler& sampler, float impulseDensity, float kernelRadius, float kernelSpatialScale, bool conditioning) {
+    if (_isotropicRaySpace3DSampling) // Evaluate 3D noise in isotropic ray space
+        return evaluateNoise3DIsotropicRayNormalized(p, rayDir, seed, sampler, impulseDensity, kernelRadius, kernelSpatialScale, conditioning);
+    else // Evaluate 3D noise in isotropic space
+        return evaluateNoise3DIsotropicNormalized(p, rayDir, seed, sampler, impulseDensity, kernelRadius, kernelSpatialScale, conditioning);
+}
+
+Vec4f SparseConvolutionNoiseRealization::evaluateNoise3D(const Vec3f& p, const Vec3f& rayDir, const uint seed, UniformSampler& sampler, bool conditioning) {
+    if (!_isotropicSpace3DSampling) {
+        if (!_multiResolutionGrid) {
+            float kernelSpatialScale = _gp->_cov->worldSamplingSpatialScale();
+            return evaluateNoise3DNormalized(p, seed, sampler, _impulseDensity, _gp->_cov->splattingKernelRadius(false, 1.0), kernelSpatialScale, conditioning);
+        }
+        else {
+            Vec4f info = kernelScaleLevelRatio(p);
+            Vec4f noise_low = evaluateNoise3DNormalized(p, seed, sampler, _impulseDensity, _gp->_cov->splattingKernelRadius(false, info.x()), info.x(), conditioning);
+            Vec4f noise_high = evaluateNoise3DNormalized(p, seed, sampler, _impulseDensity, _gp->_cov->splattingKernelRadius(false, info.y()), info.y(), conditioning);
+            return info.z() * noise_low + info.w() * noise_high;
+        }
+    }
+    else {
+        if (!_multiResolutionGrid)
+        // this is the one we want, and that prints
+            return evaluateNoise3DIsotropicNormalizedSelect(p, rayDir, seed, sampler, _impulseDensity, _gp->_cov->splattingKernelRadius(true, 1.0), 1.0, conditioning);
+        else {
+            Vec4f info = kernelScaleLevelRatio(p);
+            Vec4f noise_low = evaluateNoise3DIsotropicNormalizedSelect(p, rayDir, seed, sampler, _impulseDensity, _gp->_cov->splattingKernelRadius(true, 1.0), info.x(), conditioning);
+            Vec4f noise_high = evaluateNoise3DIsotropicNormalizedSelect(p, rayDir, seed, sampler, _impulseDensity, _gp->_cov->splattingKernelRadius(true, 1.0), info.y(), conditioning);
+            return info.z() * noise_low + info.w() * noise_high;
+        }
+    }
+}
+
+
 }
