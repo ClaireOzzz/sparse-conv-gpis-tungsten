@@ -1,4 +1,10 @@
-
+Vec2f CovarianceFunction::splattingKernel1D(float pQuery, float pCenter, const Vec3f& pCenterWorld, const Vec3f& rayDirectionWorld) const {
+    float localScale = nonStationarySplattingKernelScale(pCenterWorld);
+    localScale *= sqrt(getNonstationaryAniso1D(pCenterWorld, rayDirectionWorld));
+    float val = splattingKernel1DVal(pQuery, pCenter, localScale);
+    float grad = splattingKernel1D1stGrad(pQuery, pCenter, localScale);
+    return Vec2f(val, grad);
+}
 
 Vec2f SparseConvolutionNoiseRealization::cell1D(const Vec3f& p_world, const Vec3f& ray_dir_world, const uint i, const float t, const uint seed, UniformSampler& sampler, float impulseDensity, float kernelRadius) const {
     sampler.set_state(MathUtil::xxhash32(Vec2u(i, seed)) + 1u);

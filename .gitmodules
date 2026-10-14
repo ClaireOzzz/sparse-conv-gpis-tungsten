@@ -13,3 +13,21 @@
 [submodule "src/thirdparty/facet-forge"]
 	path = src/thirdparty/facet-forge
 	url = git@github.com:daseyb/facet-forge.git
+[submodule "vendor/imath"]
+	path = vendor/imath
+	url = https://github.com/AcademySoftwareFoundation/imath
+[submodule "vendor/openexr"]
+	path = vendor/openexr
+	url = https://github.com/academysoftwarefoundation/openexr
+[submodule "vendor/onetbb"]
+	path = vendor/onetbb
+	url = https://github.com/uxlfoundation/onetbb
+[submodule "vendor/openvdb"]
+	path = vendor/openvdb
+	url = https://github.com/AcademySoftwareFoundation/openvdb
+[submodule "vendor/c-blosc"]
+	path = vendor/c-blosc
+	url = https://github.com/blosc/c-blosc
+[submodule "vendor/qt5"]
+	path = vendor/qt5
+	url = https://github.com/qt/qt5

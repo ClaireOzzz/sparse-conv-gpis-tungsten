@@ -236,6 +236,35 @@ float SquaredExponentialCovariance::sparseConvNoiseVariance3D(float impulseDensi
     return impulseDensityUnitArea * integralKernelSquared;
 }
 
+double GaussianProcess::goodStepsize(Vec3d p, double targetCov, Vec3d rd) const
+{
+    double sigma = (*_cov)(Derivative::None, Derivative::None, shell_embedding(p), shell_embedding(p), Vec3d(0.), Vec3d(0.));
+
+    double stepsize_lb = 0;
+    double stepsize_ub = 2;
+
+    double stepsize_avg = (stepsize_lb + stepsize_ub) * 0.5;
+    double cov = (*_cov)(Derivative::None, Derivative::None, shell_embedding(p), shell_embedding(p + rd * stepsize_avg), Vec3d(0.), Vec3d(0.)) / sigma;
+
+    size_t it = 0;
+    while (std::abs(cov - targetCov) > 0.00000000001 && it++ < 100) {
+        stepsize_avg = (stepsize_lb + stepsize_ub) * 0.5;
+        if (cov > targetCov) {
+            stepsize_lb = stepsize_avg;
+        }
+        else {
+            stepsize_ub = stepsize_avg;
+        }
+        cov = (*_cov)(Derivative::None, Derivative::None, shell_embedding(p), shell_embedding(p + rd * stepsize_avg), Vec3d(0.), Vec3d(0.)) / sigma;
+    } 
+
+    return stepsize_avg;
+}
+
+virtual double goodStepsize(Vec3d p = Vec3d(0.), double targetCov = 0.95, Vec3d rd = Vec3d(1., 0., 0.)) const override {
+    return min(_left->goodStepsize(p, targetCov, rd), _right->goodStepsize(p, targetCov, rd));
+}
+
 // bool _activateConditioning;
 Vec4f evaluateNoise3DIsotropicRayNormalized(const Vec3f& p, const Vec3f& rayDir, const uint seed, UniformSampler& sampler, float impulseDensity, float kernelRadius, float kernelSpatialScale, bool conditioning) {
     // Note: Only isotropic space supports global model, but not isotropic ray space. We could probably reconcile this with more spatial transform.
@@ -274,20 +303,22 @@ Vec4f SparseConvolutionNoiseRealization::evaluateNoise3DIsotropicNormalized(cons
     Vec3f p_iso = _gp->_cov->transformPosDirWorldtoLocal(p, kernelSpatialScale);
     int additional_seed = floor(log(kernelSpatialScale) / log(_base)); // For multi-resolution noise
     // Evaluate the noise in isotropic space
-    Vec4f noise_iso = noise3D(p, p_iso, seed + additional_seed, sampler, impulseDensity, kernelRadius, 1.0);
+    // Vec4f noise_iso = noise3D(p, p_iso, seed + additional_seed, sampler, impulseDensity, kernelRadius, 1.0);
+    Vec4f noise_iso = noise3D(p, p_iso, seed, sampler, impulseDensity, kernelRadius, 1.0);
     Vec3f grad_iso = noise_iso.yzw();
     // Transform the gradient from isotropic space back to world space
     Vec3f grad_world = _gp->_cov->transformGradLocaltoWorld(grad_iso, kernelSpatialScale);
     Vec4f noise_world = Vec4f(noise_iso.x(), grad_world.x(), grad_world.y(), grad_world.z());
+    // return sparseConvNoiseVariance3D(impulseDensity, kernelRadius, isIdentity, globalScale, 1.0);
     float normalization_factor = sqrt(_gp->_cov->sparseConvNoiseVariance3D(p, impulseDensity, kernelRadius, true, 1.0));
     noise_world /= normalization_factor;
-    if (_activateConditioning && conditioning) {
-        Vec3f origin_iso = _gp->_cov->transformPosDirWorldtoLocal(coeff_3D.ray_origin, kernelSpatialScale);
-        Vec4f noise_delta_iso = _gp->_cov->splattingKernel3D(p_iso, origin_iso, true, true, 1.0, p) * coeff_3D.value_scale + _gp->_cov->splattingKernel3DGrad(p_iso, origin_iso, coeff_3D.gradient_scale, true, true, 1.0, p);
-        Vec3f grad_delta_iso = noise_delta_iso.yzw();
-        Vec3f grad_delta_world = _gp->_cov->transformGradLocaltoWorld(grad_delta_iso, kernelSpatialScale);
-        noise_world += Vec4f(noise_delta_iso.x(), grad_delta_world.x(), grad_delta_world.y(), grad_delta_world.z());
-    }
+    // if (_activateConditioning && conditioning) {
+    //     Vec3f origin_iso = _gp->_cov->transformPosDirWorldtoLocal(coeff_3D.ray_origin, kernelSpatialScale);
+    //     Vec4f noise_delta_iso = _gp->_cov->splattingKernel3D(p_iso, origin_iso, true, true, 1.0, p) * coeff_3D.value_scale + _gp->_cov->splattingKernel3DGrad(p_iso, origin_iso, coeff_3D.gradient_scale, true, true, 1.0, p);
+    //     Vec3f grad_delta_iso = noise_delta_iso.yzw();
+    //     Vec3f grad_delta_world = _gp->_cov->transformGradLocaltoWorld(grad_delta_iso, kernelSpatialScale);
+    //     noise_world += Vec4f(noise_delta_iso.x(), grad_delta_world.x(), grad_delta_world.y(), grad_delta_world.z());
+    // }
     return noise_world;
 }
 

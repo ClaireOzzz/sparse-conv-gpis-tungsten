@@ -103,6 +103,24 @@ Vec3f PathTracer::traceSample(Vec2u pixel, PathSampleGenerator &sampler, uint sp
             surfaceEvent = makeLocalScatterEvent(data, info, ray, &sampler);
             Vec3f transmittance(-1.0f);
 
+            if (_trackOutputValues && !recordedOutputValues && !info.bsdf->lobes().isForward() && (!wasSpecular || terminate)) {
+                if (_scene->cam().normalBuffer())
+                    _scene->cam().normalBuffer()->addSample(pixel, info.Ns);
+                if (_scene->cam().albedoBuffer()) {
+                    Vec3f albedo;
+                    if (const TransparencyBsdf *bsdf = dynamic_cast<const TransparencyBsdf *>(info.bsdf))
+                        albedo = (*bsdf->base()->albedo())[info];
+                    else
+                        albedo = (*info.bsdf->albedo())[info];
+                    if (info.primitive->isEmissive())
+                        albedo += info.primitive->evalDirect(data, info);
+                    _scene->cam().albedoBuffer()->addSample(pixel, albedo);
+                }
+                if (_scene->cam().visibilityBuffer() && transmittance != -1.0f)
+                    _scene->cam().visibilityBuffer()->addSample(pixel, transmittance.avg());
+                recordedOutputValues = true;
+            }
+
             auto emission_tmp = emission;
 
             bool terminate = !handleSurface(surfaceEvent, data, info, medium, bounce, false,
@@ -122,8 +140,8 @@ Vec3f PathTracer::traceSample(Vec2u pixel, PathSampleGenerator &sampler, uint sp
                 // if (_scene->cam().depthBuffer())
                 //     // _scene->cam().depthBuffer()->addSample(pixel, hitDistance);
                 //     _scene->cam().depthBuffer()->addSample(pixel, firstHitDistance >= 0.0f ? firstHitDistance : hitDistance);
-                if (_scene->cam().normalBuffer())
-                    _scene->cam().normalBuffer()->addSample(pixel, info.Ns);
+                // if (_scene->cam().normalBuffer())
+                //     _scene->cam().normalBuffer()->addSample(pixel, info.Ns);
                 if (_scene->cam().albedoBuffer()) {
                     Vec3f albedo;
                     if (const TransparencyBsdf *bsdf = dynamic_cast<const TransparencyBsdf *>(info.bsdf))
